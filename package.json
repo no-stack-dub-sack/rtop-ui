@@ -21,6 +21,7 @@
     "bs-css": "^7.0.1",
     "bs-express": "^0.8.0",
     "bs-json": "^1.0.1",
+    "bs-sql-composer": "^3.2.1",
     "bs-webapi": "^0.10.0",
     "codemirror": "^5.39.2",
     "comlink": "^3.0.3",
