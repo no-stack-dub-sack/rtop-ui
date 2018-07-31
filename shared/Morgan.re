@@ -15,6 +15,6 @@ let presetsToString =
   | Tiny => "tiny"
   | Custom(format) => format;
 
-[@bs.module] external make : string => Express.Middleware.t = "";
+[@bs.module] external make : string => Express.Middleware.t = "morgan";
 
 let make = presets => make(presetsToString(presets));
