@@ -17,15 +17,13 @@ services:
     - postgres
     restart: always
     environment:
-    - POSTGRES_PASSWORD:mysecretpassword
+    - POSTGRES_PASSWORD=mysecretpassword
+    - HASURA_GRAPHQL_DATABASE_URL=postgres://postgres:mysecretpassword@postgres:5432/postgres 
+    - HASURA_GRAPHQL_ACCESS_KEY=${GRAPHQL_ENGINE_ACCESS_KEY}
+    - HASURA_GRAPHQL_AUTH_HOOK=http://auth/auth/webhook
     command: >
       /bin/sh -c "
-      graphql-engine 
-      --database-url postgres://postgres:$${POSTGRES_PASSWORD}@postgres:5432/postgres 
-      serve \
-      --access-key ${GRAPHQL_ENGINE_ACCESS_KEY} \ 
-      --auth-hook "http://auth/auth/webhook" \
-      --enable-console;"
+      graphql-engine serve --enable-console;"
   auth:
     build:
       context: auth
@@ -38,18 +36,18 @@ services:
     #command: ../node_modules/.bin/nodemon --debug=0.0.0.0:5858
     command: ../node_modules/.bin/nodemon --inspect=0.0.0.0:9229
     ports:
-      - "3001:3001"
+      - "3001:80"
       - "9229:9229"
       - "9230:9230"
     volumes:
-      - .:/opt/app:delegated
+      - ./auth:/opt/app:delegated
       # bind-mounting these two files in will let you add packages during development without rebuilding
       # for example, to add bower to your app while developing, just install it inside the container
       # and then nodemon will restart. Your changes will last until you "docker-compose down" and will
       # be saved on host for next build
       # docker-compose exec node npm install --save bower
-      - ./package.json:/opt/package.json
-      - ./package-lock.json:/opt/package-lock.json
+      - ./auth/package.json:/opt/package.json
+      - ./auth/package-lock.json:/opt/package-lock.json
       # this is a workaround to prevent host node_modules from accidently getting mounted in container
       # in case you want to use node/npm both outside container for test/lint etc. and also inside container
       # this will overwrite the default node_modules dir in container so it won't conflict with our

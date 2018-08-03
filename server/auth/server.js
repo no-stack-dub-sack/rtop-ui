@@ -8,6 +8,7 @@ const qs = require("querystring");
 const GitHubStrategy = require("passport-github2").Strategy;
 const checkUserInfo = require("./checkUserInfo");
 const nanoid = require("nanoid");
+const morgan = require('morgan');
 
 passport.use(
   new GitHubStrategy(
@@ -54,6 +55,7 @@ passport.use(
 );
 
 const app = express();
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined": "dev"));
 app.use(passport.initialize());
 
 app.get("/auth/github", passport.authenticate("github"), function(req, res) {
@@ -103,16 +105,19 @@ app.get("/auth/webhook", (req, res) => {
 
   if (!token) {
     res.sendStatus(401);
+    return
   }
 
   jwt.verify(token, process.env.JWT_TOKEN, function(error, result) {
     if (error) {
       res.sendStatus(401);
+      return
     } else {
       res.json({
         "X-Hasura-Role": result.role,
         "X-Hasura-User-Id": result.userId,
       });
+      return
     }
   });
 });
