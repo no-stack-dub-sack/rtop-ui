@@ -117,10 +117,4 @@ app.get("/auth/webhook", (req, res) => {
   });
 });
 
-app.listen(3001, error => {
-  if (error) {
-    console.error(error);
-  } else {
-    console.log("Listening at http://localhost:" + 3001);
-  }
-});
+module.exports = app;
