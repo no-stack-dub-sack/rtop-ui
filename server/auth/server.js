@@ -102,12 +102,12 @@ app.get("/auth/webhook", (req, res) => {
   const token = jwtTokenFromHeader(req);
 
   if (!token) {
-    res.sendStatus(400);
+    res.sendStatus(401);
   }
 
   jwt.verify(token, process.env.JWT_TOKEN, function(error, result) {
     if (error) {
-      res.sendStatus(400);
+      res.sendStatus(401);
     } else {
       res.json({
         "X-Hasura-Role": result.role,
