@@ -19,4 +19,5 @@ matrix:
         script: cp ../now.json build/now.json && now --token $NOW_TOKEN build && now alias --token $NOW_TOKEN staging.rtop.khoanguyen.me
         skip_cleanup: true
         on:
-          now-test: true
+          all_branches: true
+          master: true
