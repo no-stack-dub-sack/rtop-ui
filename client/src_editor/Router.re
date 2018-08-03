@@ -3,6 +3,16 @@
    This module contains utilities on top of ReasonReact's Router
  */
 
+let redirect: string => unit = [%bs.raw
+  {|
+  function (url) {
+    window.location.href = url;
+  }
+|}
+];
+
+let push = url => ReasonReact.Router.push(url);
+
 module Link = {
   let component = ReasonReact.statelessComponent("Link");
 
@@ -35,7 +45,7 @@ module Link = {
               }),
             (),
           )
-          |> hack,
+          |. hack,
         children,
       ),
   };

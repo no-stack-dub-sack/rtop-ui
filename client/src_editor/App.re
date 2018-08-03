@@ -6,7 +6,7 @@ type state = route;
 type action =
   | ChangeView(route);
 
-let component = ReasonReact.reducerComponent("TodoApp");
+let component = ReasonReact.reducerComponent("Rtop");
 
 let make = _children => {
   ...component,
@@ -27,6 +27,8 @@ let make = _children => {
     switch (state) {
     | Home => <Home />
     | Note(_) => <Editor_Note_Loader />
+    | AuthCallback(token) => <Auth.AuthCallback token />
+    | AuthGithub => <Auth.AuthGithub />
     | _ => "not implemented" |. str
     },
 };

@@ -2,8 +2,6 @@
    Route.re
    This module contains type definition for all routes in the project
  */
-type query = Js.Dict.t(string);
-
 type noteRouteConfig = {
   user: string,
   noteId: string,
@@ -21,10 +19,12 @@ type t =
 type route = t;
 
 let urlToRoute: ReasonReact.Router.url => t =
-  url =>
+  url => {
+    Js.log(url.path);
     switch (url.path) {
     | [""]
-    | [] => Home
+    | []
+    | ["/"] => Home
     | ["auth", "github"] => AuthGithub
     | ["auth", "failure"] => AuthFailure
     | ["auth", "callback"] =>
@@ -42,3 +42,4 @@ let urlToRoute: ReasonReact.Router.url => t =
     | [user, noteId, slug] => Note({user, noteId, slug: Some(slug)})
     | _ => NotFound
     };
+  };
