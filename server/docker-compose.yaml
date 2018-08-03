@@ -22,8 +22,7 @@ services:
     - HASURA_GRAPHQL_ACCESS_KEY=${GRAPHQL_ENGINE_ACCESS_KEY}
     - HASURA_GRAPHQL_AUTH_HOOK=http://auth/auth/webhook
     command: >
-      /bin/sh -c "
-      graphql-engine serve --enable-console;"
+      /bin/sh -c "graphql-engine serve --enable-console;"
   auth:
     build:
       context: auth
