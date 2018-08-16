@@ -130,7 +130,14 @@ let syncLineNumber: array(block) => array(block) =
 let emptyCodeBlock = () =>
   B_Code({bc_value: "", bc_firstLineNumber: 1, bc_widgets: [||]});
 
-let emptyTextBlock = () => B_Text("");
+let emptyTextBlock = () => B_Text("## Cool!");
+
+let wasDeletedBlock = () =>
+  B_Code({
+    bc_value: "/* This block has been removed. It will be permanently deleted on the next edit or after 10 seconds have passed. Click undo to restore. */",
+    bc_firstLineNumber: 1,
+    bc_widgets: [||],
+  });
 
 let findLastCodeBlock = blocks => {
   let length = Array.length(blocks);
@@ -145,6 +152,12 @@ let findLastCodeBlock = blocks => {
     };
   loop(length - 1);
 };
+
+let getBlockIndex = foundIndex =>
+  switch (foundIndex) {
+  | None => (-1)
+  | Some(i) => i
+  };
 
 let getFirstLineFromDiff = (diff: CodeMirror.EditorChange.t) => {
   let fromPos = diff->CodeMirror.EditorChange.fromGet;

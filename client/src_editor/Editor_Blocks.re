@@ -18,11 +18,17 @@ type action =
 
 type state = {
   blocks: array(block),
+  deletedBlock: option(block),
   stateUpdateReason: option(action),
   focusedBlock: option((id, blockTyp, focusChangeType)),
 };
 
-let blockControlsButtons = (b_id, send) =>
+let blockControlsButtons = (b_id, deletedBlock, send) => {
+  let deletedId =
+    switch (deletedBlock) {
+    | Some({b_id as id}) => id
+    | None => ""
+    };
   <div className="block__controls--buttons">
     <UI_Balloon message="Add code block" position=Down>
       ...<button
@@ -44,11 +50,12 @@ let blockControlsButtons = (b_id, send) =>
       ...<button
            className="block__controls--button block__controls--danger"
            onClick=(_ => send(Block_Delete(b_id)))>
-           <Fi.Trash2 />
+           (deletedId == b_id ? <Fi.Refresh /> : <Fi.Trash2 />)
            <sup> "-"->str </sup>
          </button>
     </UI_Balloon>
   </div>;
+};
 
 let component = ReasonReact.reducerComponent("Editor_Page");
 
@@ -63,6 +70,7 @@ let make =
   ...component,
   initialState: () => {
     blocks: blocks->Editor_Blocks_Utils.syncLineNumber,
+    deletedBlock: None,
     stateUpdateReason: None,
     focusedBlock: None,
   },
@@ -153,13 +161,9 @@ let make =
         ),
       );
     | Block_UpdateValue(blockId, newValue, diff) =>
-      let foundIndex =
-        arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId);
       let blockIndex =
-        switch (foundIndex) {
-        | None => (-1)
-        | Some(i) => i
-        };
+        arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId)
+        ->Editor_Blocks_Utils.getBlockIndex;
 
       ReasonReact.Update({
         ...state,
@@ -218,24 +222,51 @@ let make =
           b_data: Editor_Blocks_Utils.emptyCodeBlock(),
         };
         ReasonReact.Update({
+          ...state,
           blocks: [|new_block|],
           stateUpdateReason: Some(action),
           focusedBlock: None,
         });
       } else {
+        let blockIndex =
+          arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId)
+          ->Editor_Blocks_Utils.getBlockIndex;
+        let temp_block = {
+          b_id: blockId,
+          b_data: Editor_Blocks_Utils.wasDeletedBlock(),
+        };
         ReasonReact.Update({
+          ...state,
+          stateUpdateReason: Some(action),
+          deletedBlock: Some(state.blocks[blockIndex]),
           blocks:
             state.blocks
-            ->(Belt.Array.keepU((. {b_id}) => b_id != blockId))
+            ->(
+                Belt.Array.mapWithIndexU((. i, block) => {
+                  let {b_id, b_data} = block;
+                  if (i != blockIndex) {
+                    block;
+                  } else {
+                    temp_block;
+                  };
+                })
+              )
             ->Editor_Blocks_Utils.syncLineNumber,
-          stateUpdateReason: Some(action),
-          focusedBlock:
-            switch (state.focusedBlock) {
-            | None => None
-            | Some((focusedBlock, _, _)) =>
-              focusedBlock == blockId ? None : state.focusedBlock
-            },
         });
+        /* ReasonReact.Update({
+             ...state,
+             blocks:
+               state.blocks
+               ->(Belt.Array.keepU((. {b_id}) => b_id != blockId))
+               ->Editor_Blocks_Utils.syncLineNumber,
+             stateUpdateReason: Some(action),
+             focusedBlock:
+               switch (state.focusedBlock) {
+               | None => None
+               | Some((focusedBlock, _, _)) =>
+                 focusedBlock == blockId ? None : state.focusedBlock
+               },
+           }); */
       };
     | Block_Focus(blockId, blockTyp) =>
       ReasonReact.Update({
@@ -258,6 +289,7 @@ let make =
     | Block_Add(afterBlockId, blockTyp) =>
       let newBlockId = Utils.generateId();
       ReasonReact.Update({
+        ...state,
         stateUpdateReason: Some(action),
         focusedBlock: Some((newBlockId, blockTyp, FcTyp_BlockNew)),
         blocks:
@@ -409,7 +441,7 @@ let make =
                 readOnly ?
                   React.null :
                   <div className="block__controls">
-                    (blockControlsButtons(b_id, send))
+                    (blockControlsButtons(b_id, state.deletedBlock, send))
                   </div>
               )
             </div>
