@@ -46,14 +46,25 @@ let blockControlsButtons = (b_id, deletedBlock, send) => {
            <sup> "+"->str </sup>
          </button>
     </UI_Balloon>
-    <UI_Balloon message="Delete block" position=Down>
-      ...<button
-           className="block__controls--button block__controls--danger"
-           onClick=(_ => send(Block_Delete(b_id)))>
-           (deletedId == b_id ? <Fi.Refresh /> : <Fi.Trash2 />)
-           <sup> "-"->str </sup>
-         </button>
-    </UI_Balloon>
+    (
+      deletedId != b_id ?
+        <UI_Balloon message="Delete block" position=Down>
+          ...<button
+               className="block__controls--button block__controls--danger"
+               onClick=(_ => send(Block_Delete(b_id)))>
+               <Fi.Trash2 />
+               <sup> "-"->str </sup>
+             </button>
+        </UI_Balloon> :
+        <UI_Balloon message="Restore block" position=Down>
+          ...<button
+               className="block__controls--button"
+               onClick=(_ => send(Block_Delete(b_id)))>
+               <Fi.Refresh />
+               <sup> "-"->str </sup>
+             </button>
+        </UI_Balloon>
+    )
   </div>;
 };
 
@@ -242,14 +253,9 @@ let make =
           blocks:
             state.blocks
             ->(
-                Belt.Array.mapWithIndexU((. i, block) => {
-                  let {b_id, b_data} = block;
-                  if (i != blockIndex) {
-                    block;
-                  } else {
-                    temp_block;
-                  };
-                })
+                Belt.Array.mapWithIndexU((. i, block) =>
+                  i != blockIndex ? block : temp_block
+                )
               )
             ->Editor_Blocks_Utils.syncLineNumber,
         });
