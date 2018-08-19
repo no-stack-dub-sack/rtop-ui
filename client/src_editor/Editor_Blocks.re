@@ -2,6 +2,7 @@
 Modules.require("./Editor_Blocks.css");
 
 open Utils;
+open Editor_Blocks_Utils;
 open Editor_CodeBlockTypes;
 open Editor_Types.Block;
 
@@ -25,8 +26,7 @@ type state = {
 
 let blockControlsButtons = (blockId, deletedBlocks, send) => {
   let isDeletedBlock =
-    arrayFindIndex(deletedBlocks, ({b_id}) => b_id == blockId)
-    ->Editor_Blocks_Utils.getBlockIndex
+    arrayFindIndex(deletedBlocks, ({b_id}) => b_id == blockId)->getBlockIndex
     != (-1);
   <div className="block__controls--buttons">
     <UI_Balloon message="Add code block" position=Down>
@@ -79,7 +79,7 @@ let make =
     ) => {
   ...component,
   initialState: () => {
-    blocks: blocks->Editor_Blocks_Utils.syncLineNumber,
+    blocks: blocks->syncLineNumber,
     deletedBlocks: [||],
     stateUpdateReason: None,
     focusedBlock: None,
@@ -157,8 +157,7 @@ let make =
                    results
                    ->(
                        Belt.List.forEachU((. (blockId, result)) => {
-                         let widgets =
-                           Editor_Blocks_Utils.executeResultToWidget(result);
+                         let widgets = executeResultToWidget(result);
                          self.send(Block_AddWidgets(blockId, widgets));
                        })
                      );
@@ -173,7 +172,7 @@ let make =
     | Block_UpdateValue(blockId, newValue, diff) =>
       let blockIndex =
         arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId)
-        ->Editor_Blocks_Utils.getBlockIndex;
+        ->getBlockIndex;
 
       ReasonReact.Update({
         ...state,
@@ -195,7 +194,7 @@ let make =
                           bc_value: newValue,
                           bc_widgets: {
                             let removeWidgetBelowMe =
-                              diff->Editor_Blocks_Utils.getFirstLineFromDiff;
+                              diff->getFirstLineFromDiff;
                             let currentWidgets = bcode.bc_widgets;
                             currentWidgets
                             ->(
@@ -222,15 +221,12 @@ let make =
                 };
               })
             )
-          ->Editor_Blocks_Utils.syncLineNumber,
+          ->syncLineNumber,
       });
     | Block_Delete(blockId) =>
       let last_block = Belt.Array.length(state.blocks) == 1;
       if (last_block) {
-        let new_block = {
-          b_id: Utils.generateId(),
-          b_data: Editor_Blocks_Utils.emptyCodeBlock(),
-        };
+        let new_block = {b_id: Utils.generateId(), b_data: emptyCodeBlock()};
         ReasonReact.Update({
           ...state,
           blocks: [|new_block|],
@@ -240,11 +236,8 @@ let make =
       } else {
         let blockIndex =
           arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId)
-          ->Editor_Blocks_Utils.getBlockIndex;
-        let temp_block = {
-          b_id: blockId,
-          b_data: Editor_Blocks_Utils.wasDeletedBlock(),
-        };
+          ->getBlockIndex;
+        let temp_block = {b_id: blockId, b_data: wasDeletedBlock()};
         ReasonReact.Update({
           ...state,
           stateUpdateReason: Some(action),
@@ -260,14 +253,14 @@ let make =
                   i != blockIndex ? block : temp_block
                 )
               )
-            ->Editor_Blocks_Utils.syncLineNumber,
+            ->syncLineNumber,
         });
         /* ReasonReact.Update({
              ...state,
              blocks:
                state.blocks
                ->(Belt.Array.keepU((. {b_id}) => b_id != blockId))
-               ->Editor_Blocks_Utils.syncLineNumber,
+               ->syncLineNumber,
              stateUpdateReason: Some(action),
              focusedBlock:
                switch (state.focusedBlock) {
@@ -319,8 +312,8 @@ let make =
                           b_id: newBlockId,
                           b_data:
                             switch (blockTyp) {
-                            | BTyp_Text => Editor_Blocks_Utils.emptyTextBlock()
-                            | BTyp_Code => Editor_Blocks_Utils.emptyCodeBlock()
+                            | BTyp_Text => emptyTextBlock()
+                            | BTyp_Code => emptyCodeBlock()
                             },
                         },
                       |],
@@ -329,7 +322,7 @@ let make =
                 },
               )
             )
-          ->Editor_Blocks_Utils.syncLineNumber,
+          ->syncLineNumber,
       });
     | Block_FocusUp(blockId) =>
       let upperBlock = {
