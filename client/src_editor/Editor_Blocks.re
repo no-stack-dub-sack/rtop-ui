@@ -18,22 +18,21 @@ type action =
 
 type state = {
   blocks: array(block),
-  deletedBlock: option(block),
+  deletedBlocks: array(block),
   stateUpdateReason: option(action),
   focusedBlock: option((id, blockTyp, focusChangeType)),
 };
 
-let blockControlsButtons = (b_id, deletedBlock, send) => {
-  let deletedId =
-    switch (deletedBlock) {
-    | Some({b_id as id}) => id
-    | None => ""
-    };
+let blockControlsButtons = (blockId, deletedBlocks, send) => {
+  let isDeletedBlock =
+    arrayFindIndex(deletedBlocks, ({b_id}) => b_id == blockId)
+    ->Editor_Blocks_Utils.getBlockIndex
+    != (-1);
   <div className="block__controls--buttons">
     <UI_Balloon message="Add code block" position=Down>
       ...<button
            className="block__controls--button"
-           onClick=(_ => send(Block_Add(b_id, BTyp_Code)))>
+           onClick=(_ => send(Block_Add(blockId, BTyp_Code)))>
            <Fi.Code />
            <sup> "+"->str </sup>
          </button>
@@ -41,17 +40,17 @@ let blockControlsButtons = (b_id, deletedBlock, send) => {
     <UI_Balloon message="Add text block" position=Down>
       ...<button
            className="block__controls--button"
-           onClick=(_ => send(Block_Add(b_id, BTyp_Text)))>
+           onClick=(_ => send(Block_Add(blockId, BTyp_Text)))>
            <Fi.Edit2 />
            <sup> "+"->str </sup>
          </button>
     </UI_Balloon>
     (
-      deletedId != b_id ?
+      !isDeletedBlock ?
         <UI_Balloon message="Delete block" position=Down>
           ...<button
                className="block__controls--button block__controls--danger"
-               onClick=(_ => send(Block_Delete(b_id)))>
+               onClick=(_ => send(Block_Delete(blockId)))>
                <Fi.Trash2 />
                <sup> "-"->str </sup>
              </button>
@@ -59,7 +58,7 @@ let blockControlsButtons = (b_id, deletedBlock, send) => {
         <UI_Balloon message="Restore block" position=Down>
           ...<button
                className="block__controls--button"
-               onClick=(_ => send(Block_Delete(b_id)))>
+               onClick=(_ => send(Block_Delete(blockId)))>
                <Fi.Refresh />
                <sup> "-"->str </sup>
              </button>
@@ -81,7 +80,7 @@ let make =
   ...component,
   initialState: () => {
     blocks: blocks->Editor_Blocks_Utils.syncLineNumber,
-    deletedBlock: None,
+    deletedBlocks: [||],
     stateUpdateReason: None,
     focusedBlock: None,
   },
@@ -249,7 +248,11 @@ let make =
         ReasonReact.Update({
           ...state,
           stateUpdateReason: Some(action),
-          deletedBlock: Some(state.blocks[blockIndex]),
+          deletedBlocks:
+            Js.Array.concat(
+              state.deletedBlocks,
+              [|state.blocks[blockIndex]|],
+            ),
           blocks:
             state.blocks
             ->(
@@ -447,7 +450,7 @@ let make =
                 readOnly ?
                   React.null :
                   <div className="block__controls">
-                    (blockControlsButtons(b_id, state.deletedBlock, send))
+                    (blockControlsButtons(b_id, state.deletedBlocks, send))
                   </div>
               )
             </div>
