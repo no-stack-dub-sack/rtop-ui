@@ -3,6 +3,9 @@
    - capture timeout id in new state field to cancel perm deletion when block is restored
    - make wasDeletedWarningBlocks READONLY
    - do we want code blocks to be executed when blocks are deleted and / or restored?
+   - confirm if we like way last block cases are handled
+   - replace restored block with keepU??? see ~336
+   - undo short timeout
  */
 
 [%%debugger.chrome];
@@ -16,9 +19,10 @@ open Editor_Types.Block;
 type action =
   | Block_Add(id, blockTyp)
   | Block_Execute
-  | Block_Delete_Warn(id)
-  | Block_Delete_Perm(id)
+  | Block_Delete_Queue(id)
+  | Block_Delete_Exec(id)
   | Block_Delete_Restore(id)
+  | Block_Delete_Capture_Timeout_Id(id, Js.Global.timeoutId)
   | Block_Focus(id, blockTyp)
   | Block_Blur(id)
   | Block_UpdateValue(id, string, CodeMirror.EditorChange.t)
@@ -29,6 +33,7 @@ type action =
 type state = {
   blocks: array(block),
   deletedBlocks: array(block),
+  deletedBlockMeta: array(blockTimeoutMeta),
   stateUpdateReason: option(action),
   focusedBlock: option((id, blockTyp, focusChangeType)),
 };
@@ -59,7 +64,7 @@ let blockControlsButtons = (blockId, deletedBlocks, send) => {
         <UI_Balloon message="Delete block" position=Down>
           ...<button
                className="block__controls--button block__controls--danger"
-               onClick=(_ => send(Block_Delete_Warn(blockId)))>
+               onClick=(_ => send(Block_Delete_Queue(blockId)))>
                <Fi.Trash2 />
                <sup> "-"->str </sup>
              </button>
@@ -90,6 +95,7 @@ let make =
   initialState: () => {
     blocks: blocks->syncLineNumber,
     deletedBlocks: [||],
+    deletedBlockMeta: [||],
     stateUpdateReason: None,
     focusedBlock: None,
   },
@@ -113,9 +119,10 @@ let make =
         | Block_FocusDown(_)
         | Block_Execute => ()
         | Block_Add(_, _)
-        | Block_Delete_Warn(_)
-        | Block_Delete_Perm(_)
+        | Block_Delete_Queue(_)
+        | Block_Delete_Exec(_)
         | Block_Delete_Restore(_)
+        | Block_Delete_Capture_Timeout_Id(_, _)
         | Block_UpdateValue(_, _, _) => onUpdate(newSelf.state.blocks)
         }
       };
@@ -234,25 +241,28 @@ let make =
             )
           ->syncLineNumber,
       });
-    | Block_Delete_Warn(blockId) =>
-      let warningBlock = {b_id: blockId, b_data: wasDeletedWarningBlock()};
+    | Block_Delete_Queue(blockId) =>
       let lastBlock = Belt.Array.length(state.blocks) == 1;
+      let warningBlock = {b_id: blockId, b_data: wasDeletedWarningBlock()};
       if (lastBlock) {
         let newBlock = {b_id: generateId(), b_data: emptyCodeBlock()};
         ReasonReact.UpdateWithSideEffects(
           {
+            ...state,
             deletedBlocks: [|state.blocks[0]|],
             blocks: [|newBlock, warningBlock|]->syncLineNumber,
             stateUpdateReason: Some(action),
             focusedBlock: None,
           },
           (
-            self =>
-              Js.Global.setTimeout(
-                () => self.send(Block_Delete_Perm(blockId)),
-                10000,
-              )
-              ->ignore
+            self => {
+              let timeoutId =
+                Js.Global.setTimeout(
+                  () => self.send(Block_Delete_Exec(blockId)),
+                  10000,
+                );
+              self.send(Block_Delete_Capture_Timeout_Id(blockId, timeoutId));
+            }
           ),
         );
       } else {
@@ -261,6 +271,7 @@ let make =
           ->getBlockIndex;
         ReasonReact.UpdateWithSideEffects(
           {
+            ...state,
             blocks:
               state.blocks
               ->(
@@ -270,7 +281,7 @@ let make =
                 )
               ->syncLineNumber,
             deletedBlocks:
-              Js.Array.concat(
+              Belt.Array.concat(
                 state.deletedBlocks,
                 [|state.blocks[blockIndex]|],
               ),
@@ -283,22 +294,27 @@ let make =
               },
           },
           (
-            self =>
-              Js.Global.setTimeout(
-                () => self.send(Block_Delete_Perm(blockId)),
-                10000,
-              )
-              ->ignore
+            self => {
+              let timeoutId =
+                Js.Global.setTimeout(
+                  () => self.send(Block_Delete_Exec(blockId)),
+                  2000 /* FIX - FOR TESTING ONLY!! */
+                );
+              self.send(Block_Delete_Capture_Timeout_Id(blockId, timeoutId));
+            }
           ),
         );
       };
-    | Block_Delete_Perm(blockId) =>
+    | Block_Delete_Exec(blockId) =>
       let lastBlock = Belt.Array.length(state.blocks) == 1;
       if (lastBlock) {
         let newBlock = {b_id: generateId(), b_data: emptyCodeBlock()};
         ReasonReact.Update({
           blocks: [|newBlock|],
           deletedBlocks: [||],
+          deletedBlockMeta:
+            state.deletedBlockMeta
+            ->(Belt.Array.keepU((. {id}) => id != blockId)),
           stateUpdateReason: Some(action),
           focusedBlock: None,
         });
@@ -310,6 +326,9 @@ let make =
           deletedBlocks:
             state.deletedBlocks
             ->(Belt.Array.keepU((. {b_id}) => b_id != blockId)),
+          deletedBlockMeta:
+            state.deletedBlockMeta
+            ->(Belt.Array.keepU((. {id}) => id != blockId)),
           focusedBlock:
             switch (state.focusedBlock) {
             | None => None
@@ -319,32 +338,45 @@ let make =
         });
       };
     | Block_Delete_Restore(blockId) =>
-      let warningBlockIndex =
+      let blockIndex =
         arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId)
         ->getBlockIndex;
-      let deletedBlockIndex =
-        arrayFindIndex(state.deletedBlocks, ({b_id}) => b_id == blockId)
-        ->getBlockIndex;
-      let restoredBlock = state.deletedBlocks[deletedBlockIndex];
-      ReasonReact.Update({
-        blocks:
-          state.blocks
-          ->(
-              Belt.Array.mapWithIndexU((. i, block) =>
-                i == warningBlockIndex ? restoredBlock : block
+      let restoredBlock = state.deletedBlocks
+                          ->(Belt.Array.keepU((. {b_id}) => b_id == blockId))[0];
+      let restoredBlockMeta = state.deletedBlockMeta
+                              ->(Belt.Array.keepU((. {id}) => id == blockId))[0];
+      ReasonReact.UpdateWithSideEffects(
+        {
+          blocks:
+            state.blocks
+            ->(
+                Belt.Array.mapWithIndexU((. i, block) =>
+                  i == blockIndex ? restoredBlock : block
+                )
               )
-            )
-          ->syncLineNumber,
-        deletedBlocks:
-          state.deletedBlocks
-          ->(Belt.Array.keepU((. {b_id}) => b_id != blockId)),
-        stateUpdateReason: Some(action),
-        focusedBlock:
-          switch (state.focusedBlock) {
-          | None => None
-          | Some((focusedBlock, _, _)) =>
-            focusedBlock == blockId ? None : state.focusedBlock
-          },
+            ->syncLineNumber,
+          deletedBlocks:
+            state.deletedBlocks
+            ->(Belt.Array.keepU((. {b_id}) => b_id != blockId)),
+          deletedBlockMeta:
+            state.deletedBlockMeta
+            ->(Belt.Array.keepU((. {id}) => id != blockId)),
+          stateUpdateReason: Some(action),
+          focusedBlock:
+            switch (state.focusedBlock) {
+            | None => None
+            | Some((focusedBlock, _, _)) =>
+              focusedBlock == blockId ? None : state.focusedBlock
+            },
+        },
+        (_ => Js.Global.clearTimeout(restoredBlockMeta.t_id)),
+      );
+    | Block_Delete_Capture_Timeout_Id(blockId, timeoutId) =>
+      let blockTimeoutMeta = {id: blockId, t_id: timeoutId};
+      ReasonReact.Update({
+        ...state,
+        deletedBlockMeta:
+          Belt.Array.concat(state.deletedBlockMeta, [|blockTimeoutMeta|]),
       });
     | Block_Focus(blockId, blockTyp) =>
       ReasonReact.Update({
