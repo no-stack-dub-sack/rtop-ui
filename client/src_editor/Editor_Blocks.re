@@ -10,6 +10,7 @@ type action =
   | Block_Add(id, blockTyp)
   | Block_Execute
   | Block_Delete(id)
+  | Block_Restore(id)
   | Block_Focus(id, blockTyp)
   | Block_Blur(id)
   | Block_UpdateValue(id, string, CodeMirror.EditorChange.t)
@@ -58,7 +59,7 @@ let blockControlsButtons = (blockId, deletedBlocks, send) => {
         <UI_Balloon message="Restore block" position=Down>
           ...<button
                className="block__controls--button"
-               onClick=(_ => send(Block_Delete(blockId)))>
+               onClick=(_ => send(Block_Restore(blockId)))>
                <Fi.Refresh />
                <sup> "-"->str </sup>
              </button>
@@ -105,6 +106,7 @@ let make =
         | Block_Execute => ()
         | Block_Add(_, _)
         | Block_Delete(_)
+        | Block_Restore(_)
         | Block_UpdateValue(_, _, _) => onUpdate(newSelf.state.blocks)
         }
       };
@@ -224,12 +226,12 @@ let make =
           ->syncLineNumber,
       });
     | Block_Delete(blockId) =>
-      let last_block = Belt.Array.length(state.blocks) == 1;
-      if (last_block) {
-        let new_block = {b_id: Utils.generateId(), b_data: emptyCodeBlock()};
+      let lastBlock = Belt.Array.length(state.blocks) == 1;
+      if (lastBlock) {
+        let newBlock = {b_id: generateId(), b_data: emptyCodeBlock()};
         ReasonReact.Update({
           ...state,
-          blocks: [|new_block|],
+          blocks: [|newBlock|],
           stateUpdateReason: Some(action),
           focusedBlock: None,
         });
@@ -237,23 +239,28 @@ let make =
         let blockIndex =
           arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId)
           ->getBlockIndex;
-        let temp_block = {b_id: blockId, b_data: wasDeletedBlock()};
+        let warningBlock = {b_id: blockId, b_data: wasDeletedWarningBlock()};
         ReasonReact.Update({
-          ...state,
-          stateUpdateReason: Some(action),
+          blocks:
+            state.blocks
+            ->(
+                Belt.Array.mapWithIndexU((. i, block) =>
+                  i == blockIndex ? warningBlock : block
+                )
+              )
+            ->syncLineNumber,
           deletedBlocks:
             Js.Array.concat(
               state.deletedBlocks,
               [|state.blocks[blockIndex]|],
             ),
-          blocks:
-            state.blocks
-            ->(
-                Belt.Array.mapWithIndexU((. i, block) =>
-                  i != blockIndex ? block : temp_block
-                )
-              )
-            ->syncLineNumber,
+          stateUpdateReason: Some(action),
+          focusedBlock:
+            switch (state.focusedBlock) {
+            | None => None
+            | Some((focusedBlock, _, _)) =>
+              focusedBlock == blockId ? None : state.focusedBlock
+            },
         });
         /* ReasonReact.Update({
              ...state,
@@ -270,6 +277,34 @@ let make =
                },
            }); */
       };
+    | Block_Restore(blockId) =>
+      let warningBlockIndex =
+        arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId)
+        ->getBlockIndex;
+      let deletedBlockIndex =
+        arrayFindIndex(state.deletedBlocks, ({b_id}) => b_id == blockId)
+        ->getBlockIndex;
+      let restoredBlock = state.deletedBlocks[deletedBlockIndex];
+      ReasonReact.Update({
+        blocks:
+          state.blocks
+          ->(
+              Belt.Array.mapWithIndexU((. i, block) =>
+                i == warningBlockIndex ? restoredBlock : block
+              )
+            ),
+        deletedBlocks:
+          state.deletedBlocks
+          ->(Belt.Array.keepU((. {b_id}) => b_id != blockId))
+          ->tapLog,
+        stateUpdateReason: Some(action),
+        focusedBlock:
+          switch (state.focusedBlock) {
+          | None => None
+          | Some((focusedBlock, _, _)) =>
+            focusedBlock == blockId ? None : state.focusedBlock
+          },
+      });
     | Block_Focus(blockId, blockTyp) =>
       ReasonReact.Update({
         ...state,
@@ -289,7 +324,7 @@ let make =
           ReasonReact.NoUpdate
       }
     | Block_Add(afterBlockId, blockTyp) =>
-      let newBlockId = Utils.generateId();
+      let newBlockId = generateId();
       ReasonReact.Update({
         ...state,
         stateUpdateReason: Some(action),

@@ -132,7 +132,7 @@ let emptyCodeBlock = () =>
 
 let emptyTextBlock = () => B_Text("## Cool!");
 
-let wasDeletedBlock = () =>
+let wasDeletedWarningBlock = () =>
   B_Code({
     bc_value: "/* This block has been removed. It will be permanently deleted on the next edit or after 10 seconds have passed. Click undo to restore. */",
     bc_firstLineNumber: 1,
