@@ -235,20 +235,30 @@ let make =
           ->syncLineNumber,
       });
     | Block_Delete_Warn(blockId) =>
+      let warningBlock = {b_id: blockId, b_data: wasDeletedWarningBlock()};
       let lastBlock = Belt.Array.length(state.blocks) == 1;
       if (lastBlock) {
         let newBlock = {b_id: generateId(), b_data: emptyCodeBlock()};
-        ReasonReact.Update({
-          ...state,
-          blocks: [|newBlock|],
-          stateUpdateReason: Some(action),
-          focusedBlock: None,
-        });
+        ReasonReact.UpdateWithSideEffects(
+          {
+            deletedBlocks: [|state.blocks[0]|],
+            blocks: [|newBlock, warningBlock|]->syncLineNumber,
+            stateUpdateReason: Some(action),
+            focusedBlock: None,
+          },
+          (
+            self =>
+              Js.Global.setTimeout(
+                () => self.send(Block_Delete_Perm(blockId)),
+                10000,
+              )
+              ->ignore
+          ),
+        );
       } else {
         let blockIndex =
           arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId)
           ->getBlockIndex;
-        let warningBlock = {b_id: blockId, b_data: wasDeletedWarningBlock()};
         ReasonReact.UpdateWithSideEffects(
           {
             blocks:
@@ -283,20 +293,31 @@ let make =
         );
       };
     | Block_Delete_Perm(blockId) =>
-      ReasonReact.Update({
-        ...state,
-        blocks:
-          state.blocks->(Belt.Array.keepU((. {b_id}) => b_id != blockId)),
-        deletedBlocks:
-          state.deletedBlocks
-          ->(Belt.Array.keepU((. {b_id}) => b_id != blockId)),
-        focusedBlock:
-          switch (state.focusedBlock) {
-          | None => None
-          | Some((focusedBlock, _, _)) =>
-            focusedBlock == blockId ? None : state.focusedBlock
-          },
-      })
+      let lastBlock = Belt.Array.length(state.blocks) == 1;
+      if (lastBlock) {
+        let newBlock = {b_id: generateId(), b_data: emptyCodeBlock()};
+        ReasonReact.Update({
+          blocks: [|newBlock|],
+          deletedBlocks: [||],
+          stateUpdateReason: Some(action),
+          focusedBlock: None,
+        });
+      } else {
+        ReasonReact.Update({
+          ...state,
+          blocks:
+            state.blocks->(Belt.Array.keepU((. {b_id}) => b_id != blockId)),
+          deletedBlocks:
+            state.deletedBlocks
+            ->(Belt.Array.keepU((. {b_id}) => b_id != blockId)),
+          focusedBlock:
+            switch (state.focusedBlock) {
+            | None => None
+            | Some((focusedBlock, _, _)) =>
+              focusedBlock == blockId ? None : state.focusedBlock
+            },
+        });
+      };
     | Block_Delete_Restore(blockId) =>
       let warningBlockIndex =
         arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId)
@@ -312,7 +333,8 @@ let make =
               Belt.Array.mapWithIndexU((. i, block) =>
                 i == warningBlockIndex ? restoredBlock : block
               )
-            ),
+            )
+          ->syncLineNumber,
         deletedBlocks:
           state.deletedBlocks
           ->(Belt.Array.keepU((. {b_id}) => b_id != blockId)),
