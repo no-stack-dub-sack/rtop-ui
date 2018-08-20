@@ -1,3 +1,10 @@
+/*
+  TODO:
+   - capture timeout id in new state field to cancel perm deletion when block is restored
+   - make wasDeletedWarningBlocks READONLY
+   - do we want code blocks to be executed when blocks are deleted and / or restored?
+ */
+
 [%%debugger.chrome];
 Modules.require("./Editor_Blocks.css");
 
@@ -11,7 +18,7 @@ type action =
   | Block_Execute
   | Block_Delete_Warn(id)
   | Block_Delete_Perm(id)
-  | Block_Restore(id)
+  | Block_Delete_Restore(id)
   | Block_Focus(id, blockTyp)
   | Block_Blur(id)
   | Block_UpdateValue(id, string, CodeMirror.EditorChange.t)
@@ -60,7 +67,7 @@ let blockControlsButtons = (blockId, deletedBlocks, send) => {
         <UI_Balloon message="Restore block" position=Down>
           ...<button
                className="block__controls--button"
-               onClick=(_ => send(Block_Restore(blockId)))>
+               onClick=(_ => send(Block_Delete_Restore(blockId)))>
                <Fi.Refresh />
                <sup> "-"->str </sup>
              </button>
@@ -108,7 +115,7 @@ let make =
         | Block_Add(_, _)
         | Block_Delete_Warn(_)
         | Block_Delete_Perm(_)
-        | Block_Restore(_)
+        | Block_Delete_Restore(_)
         | Block_UpdateValue(_, _, _) => onUpdate(newSelf.state.blocks)
         }
       };
@@ -290,7 +297,7 @@ let make =
             focusedBlock == blockId ? None : state.focusedBlock
           },
       })
-    | Block_Restore(blockId) =>
+    | Block_Delete_Restore(blockId) =>
       let warningBlockIndex =
         arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId)
         ->getBlockIndex;
