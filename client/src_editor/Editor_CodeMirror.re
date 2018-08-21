@@ -4,6 +4,7 @@ Modules.require("codemirror/addon/edit/matchbrackets");
 Modules.require("codemirror/addon/comment/comment");
 Modules.require("codemirror/addon/display/placeholder");
 Modules.require("codemirror/mode/gfm/gfm");
+Modules.require("codemirror/mode/mllike/mllike");
 Modules.require("codemirror/lib/codemirror.css");
 Modules.require("./cm-theme.css");
 
@@ -72,6 +73,7 @@ let make =
                 )
               );
           | FcTyp_BlockNew
+          | FcTyp_BlockExecuteAndFocusNextBlock
           | FcTyp_EditorFocus => ()
           };
         };

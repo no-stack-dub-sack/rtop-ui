@@ -1,14 +1,9 @@
+/// <reference types="Cypress" />
 const faker = require("faker");
 
-let baseUrl = "http://localhost:3000/";
-let url = path => baseUrl + path;
-
 context("note - anonymous user", () => {
-  beforeEach(() => {
-    cy.visit(url("new"));
-  });
-
   it("create new note and edit it anonymously", () => {
+    cy.visit("new/reason");
     let title = faker.lorem.words();
 
     cy.get(".Topbar__action")
@@ -31,7 +26,7 @@ context("note - anonymous user", () => {
 
     cy.get("@save").click();
 
-    cy.url().should("match", /s\/.+\/.+---.+/, "should not be new route");
+    cy.url().should("match", /s\/.+/, "should not be new route");
 
     cy.reload(true);
 

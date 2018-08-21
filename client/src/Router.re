@@ -100,18 +100,27 @@ let replaceSilent = route => replaceSilentUnsafe(Route.routeToUrl(route));
 module LinkUnsafe = {
   let component = ReasonReact.statelessComponent("LinkUnsafe");
 
-  let make = (~href, ~className=?, ~title=?, children) => {
+  let make = (~href, ~id=?, ~className=?, ~title=?, ~popup, ~role=?, children) => {
     ...component,
     render: self =>
       <a
+        ?id
         ?className
         ?title
+        ?role
         href
         onClick=(
-          self.handle((event, _self) => {
-            event->ReactEvent.Mouse.preventDefault;
-            pushUnsafe(href);
-          })
+          self.handle((event, _self) =>
+            if (!event->ReactEvent.Mouse.ctrlKey
+                && event->ReactEvent.Mouse.button != 1) {
+              event->ReactEvent.Mouse.preventDefault;
+              if (popup) {
+                Popup.openPopup(href);
+              } else {
+                pushUnsafe(href);
+              };
+            }
+          )
         )>
         ...children
       </a>,
@@ -121,11 +130,22 @@ module LinkUnsafe = {
 module Link = {
   let component = ReasonReact.statelessComponent("LinkSafe");
 
-  let make = (~route: Route.t, ~className=?, ~title=?, children) => {
+  let make =
+      (
+        ~route: Route.t,
+        ~id=?,
+        ~title=?,
+        ~className=?,
+        ~popup=false,
+        ~role=?,
+        children,
+      ) => {
     ...component,
     render: _self => {
       let href = Route.routeToUrl(route);
-      <LinkUnsafe href ?className ?title> ...children </LinkUnsafe>;
+      <LinkUnsafe href ?id ?className ?title popup ?role>
+        ...children
+      </LinkUnsafe>;
     },
   };
 };

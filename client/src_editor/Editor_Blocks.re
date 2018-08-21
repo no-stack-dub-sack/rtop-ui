@@ -10,17 +10,17 @@ Modules.require("./Editor_Blocks.css");
 
 open Utils;
 open Editor_Blocks_Utils;
-open Editor_CodeBlockTypes;
+open Editor_Types;
 open Editor_Types.Block;
 
 type action =
   | Block_Add(id, blockTyp)
-  | Block_Execute
   | Block_Queue_Delete(id)
   | Block_Delete_Queued(id)
-  | Block_Delete_All_Queued
   | Block_Restore(id)
   | Block_Capture_Timeout_Id(id, Js.Global.timeoutId)
+  | Block_Execute(bool)
+  | Block_FocusNextBlockOrCreate
   | Block_Focus(id, blockTyp)
   | Block_Blur(id)
   | Block_UpdateValue(id, string, CodeMirror.EditorChange.t)
@@ -85,10 +85,12 @@ let component = ReasonReact.reducerComponent("Editor_Page");
 
 let make =
     (
+      ~lang=RE,
       ~blocks: array(block),
       ~readOnly=false,
       ~onUpdate,
       ~registerExecuteCallback=?,
+      ~registerShortcut: option(Shortcut.subscribeFun)=?,
       _children,
     ) => {
   ...component,
@@ -100,10 +102,40 @@ let make =
     focusedBlock: None,
   },
   didMount: self => {
-    self.send(Block_Execute);
+    self.send(Block_Execute(false));
     switch (registerExecuteCallback) {
     | None => ()
-    | Some(register) => register(() => self.send(Block_Execute))
+    | Some(register) => register(() => self.send(Block_Execute(false)))
+    };
+    switch (registerShortcut) {
+    | None => ()
+    | Some(registerShortcut) =>
+      let unReg =
+        registerShortcut(
+          ~global=true,
+          "mod+enter",
+          event => {
+            open Webapi.Dom;
+
+            event->KeyboardEvent.preventDefault;
+            self.send(Block_Execute(false));
+          },
+        );
+      let unReg2 =
+        registerShortcut(
+          ~global=true,
+          "shift+enter",
+          event => {
+            open Webapi.Dom;
+
+            event->KeyboardEvent.preventDefault;
+            self.send(Block_Execute(true));
+          },
+        );
+      self.onUnmount(() => {
+        unReg();
+        unReg2();
+      });
     };
   },
   didUpdate: ({oldSelf, newSelf}) =>
@@ -117,11 +149,11 @@ let make =
         | Block_AddWidgets(_, _)
         | Block_FocusUp(_)
         | Block_FocusDown(_)
-        | Block_Execute => ()
+        | Block_FocusNextBlockOrCreate
+        | Block_Execute(_) => ()
         | Block_Add(_, _)
         | Block_Queue_Delete(_)
         | Block_Delete_Queued(_)
-        | Block_Delete_All_Queued
         | Block_Restore(_)
         | Block_Capture_Timeout_Id(_, _)
         | Block_UpdateValue(_, _, _) => onUpdate(newSelf.state.blocks)
@@ -153,7 +185,40 @@ let make =
               })
             ),
       })
-    | Block_Execute =>
+    | Block_FocusNextBlockOrCreate =>
+      let blockLength = state.blocks->Belt.Array.length;
+      let nextBlockIndex =
+        switch (state.focusedBlock) {
+        | None => blockLength - 1
+        | Some((id, _blockTyp, _)) =>
+          switch (state.blocks->arrayFindIndex((({b_id}) => b_id == id))) {
+          | None => blockLength - 1
+          | Some(index) => index
+          }
+        };
+      let findBlockId = index => {
+        let {b_id, b_data} = state.blocks[index];
+        (b_id, blockDataToBlockTyp(b_data));
+      };
+      if (nextBlockIndex == blockLength - 1) {
+        ReasonReact.SideEffects(
+          (
+            ({send}) =>
+              send(Block_Add(findBlockId(nextBlockIndex)->fst, BTyp_Code))
+          ),
+        );
+      } else if (nextBlockIndex < blockLength - 1) {
+        let (blockId, blockTyp) = findBlockId(nextBlockIndex + 1);
+        ReasonReact.Update({
+          ...state,
+          stateUpdateReason: Some(action),
+          focusedBlock:
+            Some((blockId, blockTyp, FcTyp_BlockExecuteAndFocusNextBlock)),
+        });
+      } else {
+        ReasonReact.NoUpdate;
+      };
+    | Block_Execute(focusNextBlock) =>
       let allCodeBlocks =
         state.blocks
         ->(
@@ -171,7 +236,7 @@ let make =
         (
           self =>
             Js.Promise.(
-              Editor_Worker.executeMany(. allCodeBlocks)
+              Editor_Worker.executeMany(. lang, allCodeBlocks)
               |> then_(results => {
                    results
                    ->(
@@ -183,71 +248,72 @@ let make =
 
                    resolve();
                  })
+              |> then_(() => {
+                   if (focusNextBlock) {
+                     self.send(Block_FocusNextBlockOrCreate);
+                   };
+                   resolve();
+                 })
               |> catch(error => resolve(Js.log(error)))
               |> ignore
             )
         ),
       );
     | Block_UpdateValue(blockId, newValue, diff) =>
+      let foundIndex =
+        arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId);
       let blockIndex =
-        arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId)
-        ->getBlockIndex;
+        switch (foundIndex) {
+        | None => (-1)
+        | Some(i) => i
+        };
 
-      ReasonReact.UpdateWithSideEffects(
-        {
-          ...state,
-          stateUpdateReason: Some(action),
-          blocks:
-            state.blocks
-            ->(
-                Belt.Array.mapWithIndexU((. i, block) => {
-                  let {b_id, b_data} = block;
-                  if (i < blockIndex) {
-                    block;
-                  } else if (i == blockIndex) {
-                    switch (b_data) {
-                    | B_Code(bcode) => {
-                        b_id,
-                        b_data:
-                          B_Code({
-                            ...bcode,
-                            bc_value: newValue,
-                            bc_widgets: {
-                              let removeWidgetBelowMe =
-                                diff->getFirstLineFromDiff;
-                              let currentWidgets = bcode.bc_widgets;
-                              currentWidgets
-                              ->(
-                                  Belt.Array.keepU(
-                                    (.
-                                      {
-                                        Editor_CodeBlockTypes.Widget.lw_line,
-                                        _,
-                                      },
-                                    ) =>
-                                    lw_line < removeWidgetBelowMe
-                                  )
-                                );
-                            },
-                          }),
-                      }
-                    | B_Text(_) => {b_id, b_data: B_Text(newValue)}
-                    };
-                  } else {
-                    switch (b_data) {
-                    | B_Text(_) => block
-                    | B_Code(bcode) => {
-                        ...block,
-                        b_data: B_Code({...bcode, bc_widgets: [||]}),
-                      }
-                    };
+      ReasonReact.Update({
+        ...state,
+        stateUpdateReason: Some(action),
+        blocks:
+          state.blocks
+          ->(
+              Belt.Array.mapWithIndexU((. i, block) => {
+                let {b_id, b_data} = block;
+                if (i < blockIndex) {
+                  block;
+                } else if (i == blockIndex) {
+                  switch (b_data) {
+                  | B_Code(bcode) => {
+                      b_id,
+                      b_data:
+                        B_Code({
+                          ...bcode,
+                          bc_value: newValue,
+                          bc_widgets: {
+                            let removeWidgetBelowMe =
+                              diff->Editor_Blocks_Utils.getFirstLineFromDiff;
+                            let currentWidgets = bcode.bc_widgets;
+                            currentWidgets
+                            ->(
+                                Belt.Array.keepU((. {Widget.lw_line, _}) =>
+                                  lw_line < removeWidgetBelowMe
+                                )
+                              );
+                          },
+                        }),
+                    }
+                  | B_Text(_) => {b_id, b_data: B_Text(newValue)}
                   };
-                })
-              )
-            ->syncLineNumber,
-        },
-        (self => self.send(Block_Delete_All_Queued)),
-      );
+                } else {
+                  switch (b_data) {
+                  | B_Text(_) => block
+                  | B_Code(bcode) => {
+                      ...block,
+                      b_data: B_Code({...bcode, bc_widgets: [||]}),
+                    }
+                  };
+                };
+              })
+            )
+          ->Editor_Blocks_Utils.syncLineNumber,
+      });
     | Block_Queue_Delete(blockId) =>
       let lastBlock = Belt.Array.length(state.blocks) == 1;
       let warningBlock = {b_id: blockId, b_data: wasDeletedWarningBlock()};
@@ -344,29 +410,6 @@ let make =
           stateUpdateReason: Some(action),
         });
       };
-    | Block_Delete_All_Queued =>
-      let b_ids = state.deletedBlockMeta->Belt.Array.mapU(((. {id}) => id));
-      let t_ids =
-        state.deletedBlockMeta->Belt.Array.mapU(((. {t_id}) => t_id));
-      ReasonReact.UpdateWithSideEffects(
-        {
-          ...state,
-          blocks:
-            state.blocks
-            ->(
-                Belt.Array.keepU((. {b_id}) =>
-                  b_ids |> Js.Array.indexOf(b_id) == (-1)
-                )
-              ),
-          deletedBlocks: [||],
-          stateUpdateReason: Some(action),
-        },
-        (
-          _self =>
-            t_ids
-            ->Belt.Array.forEachU((. t_id) => Js.Global.clearTimeout(t_id))
-        ),
-      );
     | Block_Restore(blockId) =>
       let blockIndex =
         arrayFindIndex(state.blocks, ({b_id}) => b_id == blockId)
@@ -528,70 +571,73 @@ let make =
       state.blocks
       ->(
           Belt.Array.mapU((. {b_id, b_data}) =>
-            <div key=b_id id=b_id className="block__container">
-              (
-                switch (b_data) {
-                | B_Code({bc_value, bc_widgets, bc_firstLineNumber}) =>
-                  <div className="source-editor">
-                    <Editor_CodeBlock
-                      value=bc_value
-                      focused=(
-                        switch (state.focusedBlock) {
-                        | None => None
-                        | Some((id, _blockTyp, changeTyp)) =>
-                          id == b_id ? Some(changeTyp) : None
-                        }
-                      )
-                      onChange=(
-                        (newValue, diff) => {
-                          Js.log("onChange");
-                          send(Block_UpdateValue(b_id, newValue, diff));
-                        }
-                      )
-                      onExecute=(() => send(Block_Execute))
-                      onFocus=(() => send(Block_Focus(b_id, BTyp_Code)))
-                      onBlur=(() => send(Block_Blur(b_id)))
-                      onBlockUp=(() => send(Block_FocusUp(b_id)))
-                      onBlockDown=(() => send(Block_FocusDown(b_id)))
-                      widgets=bc_widgets
-                      readOnly
-                      firstLineNumber=bc_firstLineNumber
-                    />
-                  </div>
-                | B_Text(text) =>
-                  <div className="text-editor">
-                    <Editor_TextBlock
-                      value=text
-                      focused=(
-                        switch (state.focusedBlock) {
-                        | None => None
-                        | Some((id, _blockTyp, changeTyp)) =>
-                          id == b_id ? Some(changeTyp) : None
-                        }
-                      )
-                      onFocus=(() => send(Block_Focus(b_id, BTyp_Text)))
-                      onBlur=(() => send(Block_Blur(b_id)))
-                      onBlockUp=(() => send(Block_FocusUp(b_id)))
-                      onBlockDown=(() => send(Block_FocusDown(b_id)))
-                      onChange=(
-                        (newValue, diff) => {
-                          Js.log("onChange");
-                          send(Block_UpdateValue(b_id, newValue, diff));
-                        }
-                      )
-                      readOnly
-                    />
-                  </div>
-                }
-              )
-              (
-                readOnly ?
-                  React.null :
-                  <div className="block__controls">
-                    (blockControlsButtons(b_id, state.deletedBlocks, send))
-                  </div>
-              )
-            </div>
+            switch (b_data) {
+            | B_Code({bc_value, bc_widgets, bc_firstLineNumber}) =>
+              <div key=b_id id=b_id className="block__container">
+                <div className="source-editor">
+                  <Editor_CodeBlock
+                    value=bc_value
+                    focused=(
+                      switch (state.focusedBlock) {
+                      | None => None
+                      | Some((id, _blockTyp, changeTyp)) =>
+                        id == b_id ? Some(changeTyp) : None
+                      }
+                    )
+                    onChange=(
+                      (newValue, diff) =>
+                        send(Block_UpdateValue(b_id, newValue, diff))
+                    )
+                    onBlur=(() => send(Block_Blur(b_id)))
+                    onFocus=(() => send(Block_Focus(b_id, BTyp_Code)))
+                    onBlockUp=(() => send(Block_FocusUp(b_id)))
+                    onBlockDown=(() => send(Block_FocusDown(b_id)))
+                    widgets=bc_widgets
+                    readOnly
+                    firstLineNumber=bc_firstLineNumber
+                    lang
+                  />
+                </div>
+                <div className="block__controls">
+                  (
+                    readOnly ?
+                      React.null :
+                      blockControlsButtons(b_id, state.deletedBlocks, send)
+                  )
+                </div>
+              </div>
+            | B_Text(text) =>
+              <div key=b_id id=b_id className="block__container">
+                <div className="text-editor">
+                  <Editor_TextBlock
+                    value=text
+                    focused=(
+                      switch (state.focusedBlock) {
+                      | None => None
+                      | Some((id, _blockTyp, changeTyp)) =>
+                        id == b_id ? Some(changeTyp) : None
+                      }
+                    )
+                    onBlur=(() => send(Block_Blur(b_id)))
+                    onFocus=(() => send(Block_Focus(b_id, BTyp_Text)))
+                    onBlockUp=(() => send(Block_FocusUp(b_id)))
+                    onBlockDown=(() => send(Block_FocusDown(b_id)))
+                    onChange=(
+                      (newValue, diff) =>
+                        send(Block_UpdateValue(b_id, newValue, diff))
+                    )
+                    readOnly
+                  />
+                </div>
+                (
+                  readOnly ?
+                    React.null :
+                    <div className="block__controls">
+                      (blockControlsButtons(b_id, state.deletedBlocks, send))
+                    </div>
+                )
+              </div>
+            }
           )
         )
       ->ReasonReact.array

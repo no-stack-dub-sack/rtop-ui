@@ -1,0 +1,37 @@
+.widget__lint-error {
+  --lint-widget-main-color: #eb5656;
+  --lint-widget-background-color: #fdeeee;
+}
+.widget__lint-warning {
+  --lint-widget-main-color: #9f6000;
+  --lint-widget-background-color: #feefb3;
+}
+
+.widget__lint .widget__lint--wrapper {
+  background-color: var(--lint-widget-background-color);
+  color: var(--lint-widget-main-color);
+  overflow: hidden;
+  position: relative;
+  min-height: 2em;
+  margin-left: -5px;
+  border-left: 4px solid var(--lint-widget-main-color);
+  display: flex;
+  align-items: center;
+}
+
+.widget__lint .wrapper__link--content {
+  padding-left: 10px;
+  white-space: pre;
+}
+
+.widget__value {
+  opacity: 0.5;
+  user-select: none;
+}
+
+.widget__stdout {
+  color: #495057;
+  background-color: #e9ecef;
+  white-space: pre;
+  padding: 0.5em;
+}

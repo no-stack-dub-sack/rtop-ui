@@ -37,6 +37,7 @@
   --c-text-sub2: rgb(143, 166, 178);
   --c-text-inverse: #fff;
   --bg-base: #fff;
+  --bg-inverse: #eee;
 
   /* Components */
   --topbar-hero-border: 4px;
@@ -69,6 +70,13 @@ body {
   margin-top: calc(var(--topbar-height) + var(--space4));
 }
 
+.Layout__center {
+  max-width: 1100px;
+  padding: calc(var(--topbar-height) + var(--space4)) var(--space4)
+    var(--space5) var(--space4);
+  margin: auto;
+}
+
 .warning-staging-server {
   position: fixed;
   bottom: 0;
@@ -79,4 +87,42 @@ body {
   background-color: #feefb3;
   border-top: 2px solid #9f6000;
   padding: var(--space2) var(--space3);
+}
+
+a {
+  color: var(--c-primary);
+}
+
+a:hover,
+a:focus {
+  color: color-mod(var(--c-primary) lightness(-6%));
+}
+
+.btn {
+  transition: background 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  border: 0;
+  text-decoration: none;
+  margin: 0;
+  padding: var(--space2);
+
+  display: flex;
+  align-items: center;
+
+  & svg {
+    margin-right: var(--space1);
+  }
+}
+
+.btn--large {
+  padding: var(--space3);
+}
+
+.btn-primary {
+  background: var(--c-primary);
+  color: var(--c-text-inverse);
+}
+
+.btn-primary:hover {
+  background: color-mod(var(--c-primary) lightness(-10%));
+  color: var(--c-text-inverse);
 }

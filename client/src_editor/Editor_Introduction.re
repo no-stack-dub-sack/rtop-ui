@@ -15,9 +15,13 @@ let noPrintFuntionNeeded = [
   Some("good bye")
 ];|};
 
-let text3 = {|## Inline errors and warnings|};
+let text3 = "## All code blocks are connected";
 
-let code4 = {|type say = Hello | Goodbye;
+let code4 = "noPrintFuntionNeeded; /* This is from the first previous block */";
+
+let text5 = {|## Inline errors and warnings|};
+
+let code6 = {|type say = Hello | Goodbye;
 
 fun
   | Hello => ()
@@ -25,10 +29,6 @@ fun
   | _ => ();
 
 let a: string = 1;|};
-
-let text5 = "## All code blocks are connected";
-
-let code6 = "noPrintFuntionNeeded; /* This is from the first code block */";
 
 let text7 = {|## Authors:
 
@@ -61,4 +61,4 @@ let blocks =
   ->(Belt.Array.mapU((. data) => {"id": Utils.generateId(), "data": data}))
   ->wrapInBlocks
   ->toJson
-  ->Editor_Types.JsonDecode.decode;
+  ->Editor_Json.V1.decode;

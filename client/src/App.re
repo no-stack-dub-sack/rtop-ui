@@ -37,22 +37,26 @@ let make = _children => {
           <Layout_WithTopbar>
             ...<AuthStatus.IsAuthenticated>
                  ...(
-                      fun
-                      | Anonymous =>
-                        <NoteNewLazy
-                          title="Sketch.sh - Interactive ReasonML sketchbook"
-                          blocks=Editor_Introduction.blocks
-                        />
-                      | Login(_) =>
-                        <HomeLazy
-                          fetch=(
-                            () => [%bs.raw
-                              {| import(/* webpackChunkName: "Home" */ "./Home.bs.js") |}
-                            ]
-                          )
-                          onLoading=(() => <UI_FullpageLoading />)
-                          render=(((module Home)) => <Home />)
-                        />
+                      user =>
+                        switch (user) {
+                        | Anonymous =>
+                          let (lang, blocks) = Editor_Introduction.blocks;
+                          <NoteNewLazy
+                            title="Sketch.sh - Interactive ReasonML sketchbook"
+                            blocks
+                            lang
+                          />;
+                        | Login(userId) =>
+                          <HomeLazy
+                            fetch=(
+                              () => [%bs.raw
+                                {| import(/* webpackChunkName: "Home" */ "./Home.bs.js") |}
+                              ]
+                            )
+                            onLoading=(() => <UI_FullpageLoading />)
+                            render=(((module Home)) => <Home userId />)
+                          />
+                        }
                     )
                </AuthStatus.IsAuthenticated>
           </Layout_WithTopbar>
@@ -68,8 +72,22 @@ let make = _children => {
                  render=(((module Note)) => <Note noteInfo />)
                />
           </Layout_WithTopbar>
-        | NoteNew =>
-          <Layout_WithTopbar> ...<NoteNewLazy /> </Layout_WithTopbar>
+        | NoteTemplateChoose =>
+          <Layout_WithTopbar>
+            ...<NoteTemplateChooseLazy
+                 fetch=(
+                   () => [%bs.raw
+                     {| import(/* webpackChunkName: "NoteTemplateChoose" */ "./NoteTemplateChoose.bs.js") |}
+                   ]
+                 )
+                 onLoading=(() => <UI_FullpageLoading />)
+                 render=(
+                   ((module NoteTemplateChoose)) => <NoteTemplateChoose />
+                 )
+               />
+          </Layout_WithTopbar>
+        | NoteNew(lang) =>
+          <Layout_WithTopbar> ...<NoteNewLazy lang /> </Layout_WithTopbar>
         | User(userName) =>
           <Layout_WithTopbar>
             ...<UserLazy
@@ -86,22 +104,6 @@ let make = _children => {
         | AuthLogout => <Auth.AuthLogout />
         | AuthGithub => <Auth.AuthGithub />
         | AuthFailure => "auth failure"->str
-        | EditorDevelopment =>
-          Utils.env == "production" ?
-            <NotFound /> :
-            <Layout_WithTopbar>
-              ...<Editor_Note_LoaderLazy
-                   fetch=(
-                     () => [%bs.raw
-                       {| import(/* webpackChunkName: "Editor_Note_Loader" */ "../src_editor/Editor_Note_Loader.bs.js") |}
-                     ]
-                   )
-                   onLoading=(() => <UI_FullpageLoading />)
-                   render=(
-                     ((module Editor_Note_Loader)) => <Editor_Note_Loader />
-                   )
-                 />
-            </Layout_WithTopbar>
         | NotFound => <NotFound />
         }
       )

@@ -1,8 +1,10 @@
+open Editor_Types;
 type state = {
   editor: ref(option(CodeMirror.editor)),
   lineWidgets: ref(list(CodeMirror.LineWidget.t)),
-  codeBlockWidgets: array(Editor_CodeBlockTypes.Widget.t),
+  codeBlockWidgets: array(Widget.t),
   firstLineNumber: int,
+  lang,
 };
 
 let component = ReasonReact.reducerComponent("Editor_CodeBlock");
@@ -12,6 +14,11 @@ let getEditor = (state, ~default, ~f) =>
   | None => default
   | Some(editor) => f(editor)
   };
+
+let langToMode =
+  fun
+  | RE => "reason"
+  | ML => "mllike";
 
 let make =
     (
@@ -24,8 +31,8 @@ let make =
       ~onBlur=?,
       ~onBlockUp=?,
       ~onBlockDown=?,
-      ~onExecute,
       ~readOnly=?,
+      ~lang=RE,
       _children,
     )
     : ReasonReact.component(state, _, unit) => {
@@ -35,6 +42,7 @@ let make =
     lineWidgets: ref([]),
     codeBlockWidgets: widgets,
     firstLineNumber,
+    lang,
   },
   willReceiveProps: ({state}) =>
     getEditor(state, ~default=state, ~f=editor =>
@@ -48,6 +56,12 @@ let make =
               );
           };
           firstLineNumber;
+        },
+        lang: {
+          if (state.lang != lang) {
+            editor->(CodeMirror.Editor.setOption("mode", lang->langToMode));
+          };
+          lang;
         },
         codeBlockWidgets: {
           if (widgets != state.codeBlockWidgets) {
@@ -67,8 +81,8 @@ let make =
                   Belt.Array.reduceU(
                     [],
                     (. acc, w) => {
-                      open Editor_CodeBlockTypes.Widget;
-                      open Editor_CodeBlockLineWidget;
+                      open Editor_Types.Widget;
+                      open Editor_LineWidget;
                       let {lw_line: line, lw_data} = w;
                       let newLineWidget =
                         switch (lw_data) {
@@ -163,29 +177,22 @@ let make =
       )
       options=(
         CodeMirror.EditorConfiguration.make(
-          ~mode="reason",
+          ~mode=lang->langToMode,
           ~theme=Config.cmTheme,
           ~lineNumbers=true,
           ~styleActiveLine=true,
           ~viewportMargin=infinity,
           ~matchBrackets=true,
           ~lineWrapping=true,
+          ~smartIndent=false,
           ~firstLineNumber,
+          ~tabSize=2,
           ~readOnly?,
           ~extraKeys={
             let key = Js.Dict.empty();
-            key
-            ->(
-                Js.Dict.set("Tab", cm => {
-                  let spaces =
-                    String.make(
-                      cm->CodeMirror.Editor.GetOption.indentUnit,
-                      ' ',
-                    );
-                  cm->(CodeMirror.Editor.replaceSelection(spaces));
-                })
-              );
-            key->(Js.Dict.set("Shift-Enter", _cm => onExecute()));
+
+            Js.Dict.set(key, "Tab", "indentMore");
+            Js.Dict.set(key, "Shift-Tab", "indentLess");
             key;
           },
           (),

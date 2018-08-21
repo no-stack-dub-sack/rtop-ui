@@ -3,21 +3,14 @@ open Utils;
 
 let component = ReasonReact.statelessComponent("UI_Topbar");
 
-let loginButton = {
-  let href = Route.routeToUrl(Route.AuthGithub);
-  <a
-    href
-    className="Topbar__login"
-    onClick=(
-      event => {
-        event->ReactEvent.Mouse.preventDefault;
-        Popup.openPopup(href);
-      }
-    )>
+let loginButton =
+  <Router.Link
+    className="btn btn-primary Topbar__login"
+    popup=true
+    route=Route.AuthGithub>
     <Fi.Github />
     "Login with Github"->str
-  </a>;
-};
+  </Router.Link>;
 
 let id = "Topbar__actions";
 
@@ -33,11 +26,12 @@ let make = _children => {
       </div>
       <div className="Topbar__right">
         <UI_Balloon position=Down message="New sketch">
-          ...<button
-               className="Topbar__action Topbar__action--highlight"
-               onClick=(_ => Router.push(Route.NoteNew))>
+          ...<Router.Link
+               route=Route.NoteTemplateChoose
+               className="Topbar__action Topbar__action--highlight">
                <Fi.Plus />
-             </button>
+               "New Sketch"->str
+             </Router.Link>
         </UI_Balloon>
         <AuthStatus.UserInfo>
           ...(

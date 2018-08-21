@@ -5,11 +5,12 @@ module GetNotes = [%graphql
   {|
     query getNotes($userName: String!) {
       note(
-        where: { owner: { username: { _eq: $userName } } }
+        where: {owner: {username: {_eq: $userName}}}
+        order_by: updated_at_desc
       ) {
         id
         title
-        updated_at
+        date: updated_at
       }
     }
   |}
@@ -23,52 +24,25 @@ let make = (~userName, _children) => {
   ...component,
   render: _self => {
     let notesQuery = GetNotes.make(~userName, ());
-
-    <div className="Layout__withHeader">
+    <section className="Layout__center User">
+      <h1> {j|$(userName)'s sketches|j}->str </h1>
       <GetNotesComponent variables=notesQuery##variables>
         ...(
              ({result}) =>
                switch (result) {
-               | Loading => <UI_FullpageLoading />
-               | Error(error) =>
-                 <div> (ReasonReact.string(error##message)) </div>
+               | Loading =>
+                 <div style=(ReactDOMRe.Style.make(~width="500px", ()))>
+                   <UI_SketchList.Placeholder />
+                 </div>
+               | Error(error) => error##message->str
                | Data(response) =>
-                 let notes = response##note;
-
-                 <div>
-                   <ul className="User__notes">
-                     ...notes
-                        ->(
-                            Belt.Array.mapU((. note) =>
-                              <li className="User__notes__note">
-                                <Router.Link
-                                  className="User__notes__title"
-                                  route=(
-                                    Route.Note({noteId: note##id, data: None})
-                                  )>
-                                  (
-                                    switch (note##title) {
-                                    | None
-                                    | Some("") => "untitled sketch"->str
-                                    | Some(title) => title->str
-                                    }
-                                  )
-                                </Router.Link>
-                                <span className="User__notes__lastEdited">
-                                  "last edited"->str
-                                  <UI_DateTime
-                                    date=note##updated_at
-                                    className="User__notes__time"
-                                  />
-                                </span>
-                              </li>
-                            )
-                          )
-                   </ul>
-                 </div>;
+                 <UI_SketchList
+                   sketches=response##note
+                   noSketches={<UI_NoSketches />}
+                 />
                }
            )
       </GetNotesComponent>
-    </div>;
+    </section>;
   },
 };

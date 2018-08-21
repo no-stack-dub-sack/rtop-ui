@@ -33,7 +33,7 @@ module EditorConfiguration = {
         Extra keymaps are found in the keymap directory. See the section on keymaps for more information. */
     keyMap: string,
     [@bs.optional] /** Can be used to specify extra keybindings for the editor, alongside the ones defined by keyMap. Should be either null, or a valid keymap value. */
-    extraKeys: Js.Dict.t(editor => unit),
+    extraKeys: Js.Dict.t(string),
     [@bs.optional] /** Whether CodeMirror should scroll or wrap for long lines. Defaults to false (scroll). */
     lineWrapping: bool,
     [@bs.optional] /** Whether to show line numbers to the left of the editor. */

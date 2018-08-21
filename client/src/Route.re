@@ -10,9 +10,9 @@ type noteRouteConfig = {
 type t =
   | Home
   | Note(noteRouteConfig)
-  | NoteNew
+  | NoteNew(Editor_Types.lang)
+  | NoteTemplateChoose
   | User(string)
-  | EditorDevelopment
   | AuthGithub
   | AuthFailure
   | AuthCallback(string)
@@ -24,17 +24,11 @@ type route = t;
 let routeToUrl: t => string =
   fun
   | Home => "/"
-  | Note({noteId, data}) =>
-    {j|/s/$(noteId)/|j}
-    ++ (
-      switch (data) {
-      | None => ""
-      | Some(data) => data
-      }
-    )
-  | NoteNew => "/new"
+  | Note({noteId, data: _}) => {j|/s/$(noteId)/|j}
+  | NoteNew(ML) => "/new/ocaml"
+  | NoteNew(RE) => "/new/reason"
+  | NoteTemplateChoose => "/new"
   | User(userName) => "/u/" ++ userName
-  | EditorDevelopment => "/____EDITOR-DEVELOPMENT____"
   | AuthGithub => "/auth/github"
   | AuthFailure => "/auth/failure"
   | AuthCallback(token) => "/auth/callback?token=" ++ token
@@ -50,9 +44,13 @@ let urlToRoute: ReasonReact.Router.url => t =
     | [""]
     | []
     | ["/"] => Home
-    | ["new"] => NoteNew
+    | ["re"]
+    | ["new", "reason"] => NoteNew(RE)
+    | ["ml"]
+    | ["new", "ocaml"]
+    | ["new", "ml"] => NoteNew(ML)
+    | ["new"] => NoteTemplateChoose
     | ["u", username] => User(username)
-    | ["____EDITOR-DEVELOPMENT____"] => EditorDevelopment
     | ["auth", "github"] => AuthGithub
     | ["auth", "failure"] => AuthFailure
     | ["auth", "callback"] =>

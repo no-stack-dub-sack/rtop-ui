@@ -29,32 +29,19 @@ open Utils;
  * This module will ensure url encoded data always in the URL
  * on initial note load
  */
-module EnsureUrlEncodedData = {
+module RedirectSketchURL = {
   type action =
-    | NoteLoaded(Js.Json.t);
-  let component = ReasonReact.reducerComponent("Note_EnsureUrlEncodedData");
+    | NoteLoaded;
+  let component = ReasonReact.reducerComponent("Note_RedirectSketchURL");
 
-  let make = (~note, ~noteId, children): React.component(unit, 'a, action) => {
+  let make = (~noteId, children): React.component(unit, 'a, action) => {
     ...component,
-    didMount: ({send}) =>
-      switch (note##data) {
-      | None => ()
-      | Some(json) => send(NoteLoaded(json))
-      },
+    didMount: ({send}) => send(NoteLoaded),
     reducer: (action, _) =>
       switch (action) {
-      | NoteLoaded(json) =>
+      | NoteLoaded =>
         ReasonReact.SideEffects(
-          (
-            _ =>
-              NoteSave.replaceNoteRoute(
-                ~noteId,
-                ~json,
-                ~title=note##title->optionToEmptyString,
-                ~kind=Replace,
-              )
-              ->ignore
-          ),
+          (_ => NoteSave.replaceNoteRoute(~noteId, ~kind=Replace)->ignore),
         )
       },
     render: _send => children,
@@ -72,15 +59,14 @@ let make = (~noteInfo: Route.noteRouteConfig, _children) => {
       ...(
            ({result}) =>
              switch (result) {
-             | Loading => <UI_FullpageLoading />
-             | Error(error) =>
-               <div> (ReasonReact.string(error##message)) </div>
+             | Loading => <Editor_NotePlaceholder />
+             | Error(error) => error##message->str
              | Data(response) =>
                let notes = response##note;
                notes
                ->(
                    arrayFirst(~empty=<NotFound entity="note" />, ~render=note =>
-                     <EnsureUrlEncodedData noteId=noteInfo.noteId note>
+                     <RedirectSketchURL noteId=noteInfo.noteId>
                        ...<NoteSave noteKind=(Old(noteInfo.noteId))>
                             ...(
                                  (~noteSaveStatus, ~user, ~onSave) => {
@@ -102,25 +88,26 @@ let make = (~noteInfo: Route.noteRouteConfig, _children) => {
                                        response##note_edit_token->Array.length
                                        > 0
                                      };
+                                   let (lang, blocks) =
+                                     switch (note##data) {
+                                     | None => (Editor_Types.RE, [||])
+                                     | Some(blocks) =>
+                                       blocks->Editor_Json.V1.decode
+                                     };
                                    <Editor_Note
                                      title=note##title->optionToEmptyString
                                      isEditable
                                      noteLastEdited=note##updated_at
                                      noteOwner=note##owner
-                                     blocks=(
-                                       switch (note##data) {
-                                       | None => [||]
-                                       | Some(blocks) =>
-                                         blocks->Editor_Types.JsonDecode.decode
-                                       }
-                                     )
+                                     blocks
+                                     lang
                                      noteSaveStatus
                                      onSave
                                    />;
                                  }
                                )
                           </NoteSave>
-                     </EnsureUrlEncodedData>
+                     </RedirectSketchURL>
                    )
                  );
              }
