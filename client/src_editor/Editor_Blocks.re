@@ -1,11 +1,8 @@
 /*
   TODO:
-   - capture timeout id in new state field to cancel perm deletion when block is restored
    - make wasDeletedWarningBlocks READONLY
    - do we want code blocks to be executed when blocks are deleted and / or restored?
    - confirm if we like way last block cases are handled
-   - replace restored block with keepU??? see ~336
-   - undo short timeout
  */
 
 [%%debugger.chrome];
